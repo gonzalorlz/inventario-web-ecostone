@@ -1,1 +1,1 @@
-web: flutter run --release --no-sound-null-safety --web-hostname 0.0.0.0 --web-port $PORT
+web: flutter run -d web-server --web-port $PORT
