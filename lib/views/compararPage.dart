@@ -135,7 +135,7 @@ class _CompararPageState extends State<CompararPage> {
                   _showInventoryDialog(List<Map<String, dynamic>>.from(data));
                 },
                 child: Text(
-                  'Bodega',
+                  'Bodega ',
                   style: TextStyle(
                     fontSize: 16.0,
                     fontWeight: FontWeight.bold,
