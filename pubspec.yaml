@@ -19,6 +19,8 @@ version: 1.0.0+1
 
 environment:
   sdk: ">=2.7.0 <3.0.0"
+  variables: 
+    FLUTTER_VERSION: 3.3.9
 
 dependencies:
   cupertino_icons: ^1.0.2
