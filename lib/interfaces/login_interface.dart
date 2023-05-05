@@ -61,7 +61,7 @@ class ILogin {
     Response response = await dio.get(api, queryParameters: _tok);
     if (response.statusCode == 200) {
       final list = response.data['inventariosBodega'];
-      print('lista : $list');
+
       return list;
     } else {
       throw Exception('Error en los datos');

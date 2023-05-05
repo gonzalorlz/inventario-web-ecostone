@@ -6,6 +6,7 @@ import 'package:hungry/escanear/escanearController.dart';
 import 'package:hungry/interfaces/login_interface.dart';
 import 'package:hungry/views/widgets/appBar.dart';
 import 'package:hungry/views/widgets/drawer_page.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class EscanearPagina extends StatefulWidget {
@@ -19,7 +20,7 @@ class _EscanearPaginaState extends State<EscanearPagina> {
   final Future _prefs = SharedPreferences.getInstance();
   List<Map<String, dynamic>> inventoryList = [];
   List<Map<String, dynamic>> inventarioBuscarCodigo = [];
-  Map currentInventory;
+  Map _currentInventory;
   final _service = ILogin();
   final controller = EscanearController();
   final scrollController = ScrollController();
@@ -41,7 +42,7 @@ class _EscanearPaginaState extends State<EscanearPagina> {
     final inventory = prefs.getString('currentInventory');
     if (inventory != null) {
       setState(() {
-        currentInventory = null;
+        _currentInventory = Map<String, dynamic>.from(jsonDecode(inventory));
       });
     }
   }
@@ -64,7 +65,7 @@ class _EscanearPaginaState extends State<EscanearPagina> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('currentInventory');
     setState(() {
-      currentInventory = null;
+      _currentInventory = null;
     });
   }
 
@@ -79,9 +80,12 @@ class _EscanearPaginaState extends State<EscanearPagina> {
         child: CircularProgressIndicator(),
       );
     } else {
+      print(
+          'el inventorylist es : $inventoryList y es de typE: ${inventoryList.runtimeType}');
       return Center(
         child: ElevatedButton(
-          child: Text('Mostrar Inventarios', style: TextStyle(fontSize: 18.0)),
+          child: Text('Seleccione un inventario ',
+              style: TextStyle(fontSize: 18.0)),
           onPressed: () => showDialog(
             context: context,
             builder: (BuildContext context) => Dialog(
@@ -124,7 +128,7 @@ class _EscanearPaginaState extends State<EscanearPagina> {
                                   'currentInventory', inventory);
 
                               setState(() {
-                                currentInventory = jsonDecode(inventory);
+                                _currentInventory = jsonDecode(inventory);
                               });
 
                               Navigator.pop(context);
@@ -176,192 +180,156 @@ class _EscanearPaginaState extends State<EscanearPagina> {
     }
   }
 
-  Widget viewInventoryDetailButton(
-    BuildContext context,
-  ) =>
-      ElevatedButton(
-        onPressed: () => _showArrayDetail(context, currentInventory['_id']),
+  Widget viewInventoryDetailButton() => ElevatedButton(
+        onPressed: () => _showArrayDetail(context, _currentInventory['_id']),
         child: Text('Ver Detalles del Invenatrio',
             style: TextStyle(fontSize: 18.0)),
       );
 
   Widget deleteButton() => ElevatedButton(
         onPressed: delete,
-        child: Text('Delete Inventory'),
+        child: Text('Eliminar Inventyario'),
       );
+
+  Future<Widget> currentInventoryDetail() async {
+    print('entro aca ');
+    final inventoryDetailJson = await _getInventoryDetail();
+    Map<String, dynamic> inventoryDetail =
+        inventoryDetailJson.isNotEmpty ? jsonDecode(inventoryDetailJson) : {};
+
+    return Center(
+        child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Text(
+            'Inventario Seleccionado:',
+            style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(height: 16.0),
+        Center(
+          child: Text(
+            'Nombre: ${_currentInventory['nombre'] ?? ""}',
+            style: TextStyle(fontSize: 18.0),
+          ),
+        ),
+        Center(
+          child: Text(
+            'Fecha: ${_currentInventory['fecha'] != null ? DateFormat('yyyy-MM-dd').format(DateTime.parse(_currentInventory['fecha'])) : ""}',
+            style: TextStyle(fontSize: 18.0),
+          ),
+        ),
+        const SizedBox(height: 16.0),
+      ],
+    ));
+  }
 
   Widget _buildBody(BuildContext context) {
     return FutureBuilder(
-      future: _prefs,
+      future: Future.wait([_prefs, _getInventoryDetail()]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Center(
             child: CircularProgressIndicator(),
           );
         }
-        final prefs = snapshot.data;
+
+        final prefs = snapshot.data[0];
+        final inventoryDetail = snapshot.data[1];
+
         String currentInventorys = prefs.getString('currentInventory') ?? '';
-        if (currentInventorys.isNotEmpty) {
-          currentInventory = jsonDecode(currentInventorys);
+        Map<String, dynamic> currentInventory =
+            currentInventorys.isNotEmpty ? jsonDecode(currentInventorys) : null;
+        if (currentInventory != null) {
+          currentInventory['detail'] = inventoryDetail;
+          prefs.setString('currentInventory', jsonEncode(currentInventory));
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (currentInventory == null) buildInventoryButton(context),
-              if (currentInventory != null) ...[
-                currentInventoryDetail(context),
-                SizedBox(height: 16.0),
-                viewInventoryDetailButton(context),
-                SizedBox(height: 16.0),
-                deleteButton(),
-                SizedBox(height: 16.0),
-              ],
-              ElevatedButton(
-                onPressed: () async {
-                  final barcodeScanRes =
-                      await FlutterBarcodeScanner.scanBarcode(
-                    '#ff6666',
-                    'Cancel',
-                    true,
-                    ScanMode.BARCODE,
-                  );
-
-                  if (barcodeScanRes != null) {
-                    scancode = barcodeScanRes;
-                    var itemSeleccionado = buscarItem(scancode);
-
-                    setState(() {
-                      item = itemSeleccionado;
-                    });
-                    print('el item seleccionado es: $itemSeleccionado');
-
-                    if (item != null) {
-                      showDialog(
-                        context: context,
-                        builder: (BuildContext dialogContext) {
-                          return AlertDialog(
-                            contentPadding: EdgeInsets.all(16.0),
-                            title: Text('Producto Escaneado'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Codigo: ${item['codigo']}'),
-                                Text('Descripcion: ${item['descripcion']}'),
-                                Text('Stock: ${item['stock']}'),
-                                Text('Categoria: ${item['categoria']}'),
-                                Text('CodigoFsl: ${item['codigoFsl']}'),
-                                TextFormField(
-                                  controller: controllerStock,
-                                  decoration: InputDecoration(
-                                    labelText: 'Ingrese su input',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(dialogContext),
-                                child: Text('Cerrar'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () async {
-                                  if (controllerStock.text.isNotEmpty) {
-                                    item['stock'] = controllerStock.text;
-                                    final itemNew =
-                                        Map<String, dynamic>.from(item);
-                                    final data = {
-                                      '_id': currentInventory['_id'],
-                                      'arrayDetalle': [itemNew]
-                                    };
-
-                                    final add =
-                                        addProductoInventarioBodega(data);
-
-                                    var a =
-                                        await _service.obtenerInventarioBodega(
-                                            currentInventory['_id']);
-
-                                    final inventory = json.encode(a);
-
-                                    final prefs =
-                                        await SharedPreferences.getInstance();
-                                    await prefs.setString(
-                                        'currentInventory', inventory);
-                                    Navigator.pop(dialogContext);
-                                  }
-                                },
-                                child: Text('Guardar'),
-                              ),
-                            ],
+        return Center(
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(height: 24.0),
+                OutlinedButton.icon(
+                  onPressed: currentInventory == null
+                      ? null
+                      : () async {
+                          final barcodeScanRes =
+                              await FlutterBarcodeScanner.scanBarcode(
+                            '#ff6666',
+                            'Cancelar',
+                            true,
+                            ScanMode.BARCODE,
                           );
                         },
-                      );
-                    }
-                  }
-                },
-                child: Text(
-                  'Escanear Codigo',
-                  style: TextStyle(fontSize: 18.0),
+                  icon: Icon(Icons.qr_code_scanner),
+                  label: Text(
+                    'Escanear Código',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 32.0,
+                      vertical: 16.0,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(height: 32.0),
+                if (currentInventory == null) buildInventoryButton(context),
+                if (currentInventory != null) ...[
+                  FutureBuilder(
+                    future: currentInventoryDetail(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+
+                      return Container(
+                        child: snapshot.data,
+                      );
+                    },
+                  ),
+                  SizedBox(height: 32.0),
+                  Container(
+                    constraints: BoxConstraints(maxWidth: 500),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Expanded(
+                          child: viewInventoryDetailButton(),
+                        ),
+                        SizedBox(width: 32.0),
+                        Expanded(
+                          child: deleteButton(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 32.0),
+                ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget currentInventoryDetail(BuildContext context) {
-    if (currentInventory == null) {
-      return Container();
-    }
-    return Center(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Text(
-              'Inventario Seleccionado:',
-              style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 16.0),
-          Center(
-            child: Text(
-              'Name: ${currentInventory['nombre'] ?? ""}',
-              style: TextStyle(fontSize: 18.0),
-            ),
-          ),
-          Center(
-            child: Text(
-              'Date: ${currentInventory['fecha'] ?? ""}',
-              style: TextStyle(fontSize: 18.0),
-            ),
-          ),
-          const SizedBox(height: 16.0),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: viewInventoryDetailButton(
-                  context,
-                ),
-              ),
-              const SizedBox(
-                width: 16.0,
-              ),
-              Flexible(
-                child: deleteButton(),
-              ),
-            ],
-          )
-        ],
-      ),
-    );
+  Future _getInventoryDetail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('currentInventoryDetail') ?? '';
   }
 
   dynamic buscarItem(String codigo) {
