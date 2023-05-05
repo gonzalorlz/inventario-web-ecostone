@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hungry/interfaces/login_interface.dart';
 import 'package:hungry/views/widgets/appBar.dart';
-import 'package:hungry/views/widgets/drawer_page.dart';
+import 'package:hungry/views/widgets/loading.dart';
 
 class CompararPage extends StatefulWidget {
   @override
@@ -9,404 +9,420 @@ class CompararPage extends StatefulWidget {
 }
 
 class _CompararPageState extends State<CompararPage> {
-  Map<String, dynamic> selectedData = {};
-  Map<String, dynamic> selectedDataFromInventario;
-  Map<String, dynamic> selectedDataFromBodega;
-  List<Map<String, dynamic>> dataInventario = [];
-  List<Map<String, dynamic>> dataBodega = [];
-  final service = ILogin();
+  final ILogin _loginService = ILogin();
+  List<Map<String, dynamic>> _inventoriesBodega = [];
+  List<Map<String, dynamic>> _inventories = [];
+  bool _isLoading = false;
+  String r = '';
+  String _r = '';
+  Future<List<Map<String, dynamic>>> _getInventarioSistema() async {
+    List<dynamic> data = await _loginService.obtenerInventarios();
+    if (data != null)
+      return List<Map<String, dynamic>>.from(data);
+    else
+      return null;
+  }
 
-  Future<void> _showDialog(
-      List<Map<String, dynamic>> dataList,
-      BuildContext context,
-      Function(Map<String, dynamic>) selectedDataCallback) async {
-    selectedData = {};
+  Future<List<Map<String, dynamic>>> _getInventariosBodega() async {
+    List<dynamic> data = await _loginService.obtenerInventariosBodega();
+    if (data != null)
+      return List<Map<String, dynamic>>.from(data);
+    else
+      return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  bool _showTable() {
+    if (_selectedInventories.length == 2 &&
+        _selectedInventories[0]['arrayDetalle'] != null &&
+        _selectedInventories[1]['arrayDetalle'] != null) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  List<Map<String, dynamic>> _selectedInventories = [];
+
+  _showInventoryDialog(List<Map<String, dynamic>> inventories) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return SimpleDialog(
-          title: Text('Selecciona un inventario'),
-          children: dataList
-              .map(
-                (data) => SimpleDialogOption(
-                  onPressed: () {
+        return AlertDialog(
+          title: Text('Inventories'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: inventories.map((inventory) {
+                var nombre = inventory['nombre'] ?? 'No Name';
+                var fecha = inventory['fecha'] ?? 'No Date';
+                return ListTile(
+                  title: Text(nombre),
+                  subtitle: Text(fecha),
+                  onTap: () {
                     setState(() {
-                      selectedData = data;
-                      Navigator.pop(context);
-                      selectedDataCallback(selectedData);
+                      _selectedInventories.add(inventory);
                     });
+                    Navigator.of(context).pop();
                   },
-                  child: Text(data['nombre'] ?? ""), // Add null check here
-                ),
-              )
-              .toList(),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
         );
       },
     );
   }
 
-  void _setSelectedDataFromInventario(Map<String, dynamic> data) {
-    setState(() {
-      selectedDataFromInventario = data;
-    });
-  }
-
-  void _setSelectedDataFromBodega(Map<String, dynamic> data) {
-    setState(() {
-      selectedDataFromBodega = data;
-    });
-  }
-
+  @override
   Widget build(BuildContext context) {
-    List<dynamic> arrayDetalle = _getDifferenceArray();
-
     return Scaffold(
       appBar: AppBarWidget().appBar('Comparar'),
-      drawer: MyDrawerWidget(),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(height: 24),
+          SizedBox(height: 20.0),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(
-                child: _buildInventoryButton(),
+              ElevatedButton(
+                onPressed: () async {
+                  setState(() {
+                    _isLoading = true;
+                  });
+                  var data = await _getInventarioSistema();
+                  setState(() {
+                    _inventories = data;
+                    _isLoading = false;
+                  });
+                  _showInventoryDialog(List<Map<String, dynamic>>.from(data));
+                },
+                child: Text(
+                  'Sistema',
+                  style: TextStyle(
+                    fontSize: 16.0,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding:
+                      EdgeInsets.symmetric(vertical: 10.0, horizontal: 20.0),
+                ),
               ),
-              SizedBox(width: 24),
-              Expanded(
-                child: _buildWarehouseButton(),
+              SizedBox(width: 20.0),
+              ElevatedButton(
+                onPressed: () async {
+                  setState(() {
+                    _isLoading = true;
+                  });
+                  var data = await _getInventariosBodega();
+                  setState(() {
+                    _inventoriesBodega = data;
+                    _isLoading = false;
+                  });
+                  _showInventoryDialog(List<Map<String, dynamic>>.from(data));
+                },
+                child: Text(
+                  'Bodega',
+                  style: TextStyle(
+                    fontSize: 16.0,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding:
+                      EdgeInsets.symmetric(vertical: 10.0, horizontal: 20.0),
+                ),
               ),
             ],
           ),
-          SizedBox(height: 24),
-          if (selectedDataFromInventario != null &&
-              selectedDataFromBodega != null) ...[
+          SizedBox(height: 20.0),
+          if (_isLoading)
             Expanded(
-              child: _buildSelectedInventoryCard(),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Loading().loadingIndicator(),
+                    SizedBox(height: 10.0),
+                    Text(
+                      'Cargando...',
+                      style: TextStyle(
+                        fontSize: 16.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            SizedBox(height: 10),
+          if (_showTable())
             Expanded(
-              child: _buildSelectedWarehouseCard(),
-            ),
-            SizedBox(height: 10),
-            Expanded(
-              child: _buildDifferenceCard(context, arrayDetalle),
-            ),
-          ],
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                child: ListViewBuilder(),
+              ),
+            )
         ],
       ),
     );
   }
 
-  Widget _buildDifferenceCard(BuildContext context, List arrayDetalle) {
+// ignore: non_constant_identifier_names
+  ListViewBuilder() {
+    List filteredInventories = List.from(_selectedInventories);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Diferencias :",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        TextField(
+          onChanged: (valor) {
+            _r = valor;
+            filteredInventories = _selectedInventories.where((inventory) {
+              final nombre = inventory['nombre']?.toLowerCase() ?? '';
+              final fecha = inventory['fecha']?.toLowerCase() ?? '';
+              final detalle = inventory['arrayDetalle']
+                      ?.map((item) => item.values.join(' '))
+                      ?.join(' ')
+                      ?.toLowerCase() ??
+                  '';
+              final invDetalle = inventory['detalle']?.toLowerCase() ?? '';
+
+              final query = valor.toLowerCase();
+
+              return nombre.contains(query) ||
+                  fecha.contains(query) ||
+                  detalle.contains(query) ||
+                  invDetalle.contains(query);
+            }).toList();
+
+            setState(() {});
+          },
+          decoration: InputDecoration(
+            hintText: 'Search...',
+            border: OutlineInputBorder(),
           ),
         ),
-        SizedBox(height: 16),
+        Divider(),
         Expanded(
-          child: GestureDetector(
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (BuildContext context) {
-                  return AlertDialog(
-                    contentPadding: EdgeInsets.all(0.0),
-                    content: Container(
-                      width: double.maxFinite,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Text(
-                                  "Buscar",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                },
-                                icon: Icon(Icons.close),
-                              ),
-                            ],
-                          ),
-                          TextField(
-                            decoration: InputDecoration(
-                              hintText: "Buscar por descripcion",
-                              suffixIcon: Icon(Icons.search),
-                              border: InputBorder.none,
-                            ),
-                            onChanged: (value) {
-                              // Tu código para filtrar los elementos
-                            },
-                          ),
-                          Expanded(
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: arrayDetalle.length,
-                              itemBuilder: (BuildContext context, int index) {
-                                return Card(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          "${arrayDetalle[index]['descripcion']}",
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        SizedBox(height: 8),
-                                        Text(
-                                          "${arrayDetalle[index]['categoria']}",
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                        Text(
-                                          "${arrayDetalle[index]['codigo']}",
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                        Text(
-                                          "${arrayDetalle[index]['codigoFsl']}",
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: filteredInventories.length,
+            itemBuilder: (BuildContext context, int index) {
+              final inventory = filteredInventories[index];
+              final nombre = inventory['nombre'] ?? 'No Name';
+              final fecha = inventory['fecha'] ?? 'No Date';
+              final detalle = inventory['arrayDetalle'] ?? [];
+
+              // Get Bodega Detalle
+              final bodegaDetalle = _inventoriesBodega
+                  .expand((inv) => inv['arrayDetalle'] as List<dynamic>)
+                  .toList()
+                  .cast<Map<String, dynamic>>();
+
+              List<dynamic> filteredDetalle = detalle.where((item) {
+                // ignore: unnecessary_cast
+                final stockItem = bodegaDetalle.firstWhere(
+                  (bodegaItem) => bodegaItem['codigo'] == item['codigo'],
+                  orElse: () => <String, dynamic>{},
+                ) as Map<String, dynamic>;
+                final stock = convertirCadenaANumeroEntero(
+                    stockItem['stock'] as String ?? '0');
+                final difference =
+                    convertirCadenaANumeroEntero(item['stock']) - stock;
+
+                final detalleItem =
+                    item['descripcion']?.toString()?.toLowerCase() ?? '';
+                final codigoItem =
+                    item['codigo']?.toString()?.toLowerCase() ?? '';
+                final codeFsl =
+                    item['codigoFsl']?.toString()?.toLowerCase() ?? '';
+
+                final query = _r.toLowerCase();
+
+                return detalleItem.contains(query) ||
+                    codigoItem.contains(query) ||
+                    codeFsl.contains(query);
+              }).toList();
+
+              return FutureBuilder(
+                future:
+                    Future.delayed(Duration(milliseconds: 500), () => 'Data'),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(
+                      child: Loading().loadingIndicator(),
+                    );
+                  } else {
+                    return responsiveScrollView(filteredDetalle, bodegaDetalle);
+                  }
                 },
               );
             },
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: Colors.grey,
-                ),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      "ver lista de diferencias ",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Icon(Icons.list),
-                  ),
-                ],
-              ),
-            ),
           ),
-        ),
-        SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Total: ${arrayDetalle.length}",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(
-              Icons.numbers,
-              size: 16,
-            ),
-          ],
         ),
       ],
     );
   }
 
-  Widget _buildInventoryButton() {
-    return ElevatedButton(
-      onPressed: () async {
-        await setDataInventario();
-        if (dataInventario.isNotEmpty) {
-          await _showDialog(
-              dataInventario, context, _setSelectedDataFromInventario);
-        }
-      },
-      child: Text(
-        "Seleccionar inventario",
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      style: ButtonStyle(
-        padding: MaterialStateProperty.all(
-          EdgeInsets.symmetric(
-            horizontal: 32,
-            vertical: 16,
+  Widget responsiveScrollView(List detalle, List bodegaDetalle) {
+    return Column(
+      children: detalle.map((item) {
+        final stockItem = bodegaDetalle.firstWhere(
+          (bodegaItem) => bodegaItem['codigo'] == item['codigo'],
+          orElse: () => <String, dynamic>{},
+        ) as Map<String, dynamic>;
+        final stock =
+            convertirCadenaANumeroEntero(stockItem['stock'] as String ?? '0');
+        final difference = convertirCadenaANumeroEntero(item['stock']) - stock;
+
+        return Card(
+          margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          elevation: 5,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWarehouseButton() {
-    return ElevatedButton(
-      onPressed: () async {
-        await setDataBodega();
-        if (dataBodega.isNotEmpty) {
-          await _showDialog(dataBodega, context, _setSelectedDataFromBodega);
-          setState(() {});
-        }
-      },
-      child: Text(
-        "Seleccionar bodega",
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      style: ButtonStyle(
-        padding: MaterialStateProperty.all(
-          EdgeInsets.symmetric(
-            horizontal: 32,
-            vertical: 16,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSelectedInventoryCard() {
-    if (selectedDataFromBodega == null) return Container();
-
-    return Flexible(
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Item seleccionado en Inventario:",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+          child: Padding(
+            padding: EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.code,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Codigo : ${item['codigo'].toString()}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '${selectedDataFromBodega['nombre'] ?? ''}',
-                style: TextStyle(fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSelectedWarehouseCard() {
-    if (selectedDataFromInventario == null) return Container();
-
-    return Flexible(
-      fit: FlexFit.tight,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Item seleccionado en Inventario:",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.description,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Descripcion: ${item['descripcion'].toString()}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '${selectedDataFromInventario['nombre'] ?? ''}',
-                style: TextStyle(fontSize: 16),
-              ),
-            ],
+                SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.credit_card,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Código FSL: ${item['codigoFsl'].toString()}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.storage,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Stock Bodega: ${stock.toString()}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.inventory,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Stock Sistema : ${(item['stock'] ?? "").toString()}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.compare_arrows,
+                      size: 20,
+                      color: difference > 0 ? Colors.red : Colors.green,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Diferencia: ${difference.toString()}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: difference > 0 ? Colors.red : Colors.green,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      }).toList(),
     );
   }
 
-  List<dynamic> _getDifferenceArray() {
-    List<dynamic> arrayDetalle = [];
-    if (selectedDataFromInventario != null && selectedDataFromBodega != null) {
-      Set<dynamic> setInventario =
-          Set.from(selectedDataFromInventario['arrayDetalle']);
-      Set<dynamic> setBodega = Set.from(selectedDataFromBodega['arrayDetalle']);
-      arrayDetalle = setInventario.difference(setBodega).toList();
+  int convertirCadenaANumeroEntero(String numeroFormateado) {
+    String numeroSinFormato =
+        numeroFormateado.replaceAll(RegExp('[^0-9\\-\\,]'), '');
+    int indexComa = numeroSinFormato.lastIndexOf(",");
+    if (indexComa != -1) {
+      numeroSinFormato = numeroSinFormato.substring(0, indexComa);
     }
-    return arrayDetalle;
-  }
-
-  Future setDataInventario() async {
-    final data = await obtenerInventarios();
-    setState(() {
-      dataInventario = data;
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> obtenerInventarios() async {
-    final List data = await service.obtenerInventarios();
-    List<Map<String, dynamic>> typedList =
-        data.map((i) => i as Map<String, dynamic>).toList();
-    return typedList;
-  }
-
-  Future<List<Map<String, dynamic>>> obtenerInventariosBodega() async {
-    final List data = await service.obtenerInventariosBodega();
-    List<Map<String, dynamic>> typedList =
-        data.map((i) => i as Map<String, dynamic>).toList();
-    return typedList;
-  }
-
-  Future setDataBodega() async {
-    final data = await obtenerInventariosBodega();
-    setState(() {
-      dataBodega = data;
-    });
+    numeroSinFormato = numeroSinFormato.replaceAll(",", "").replaceAll(".", "");
+    int numeroEntero = int.parse(numeroSinFormato);
+    return numeroEntero;
   }
 }

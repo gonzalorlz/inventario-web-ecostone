@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:hungry/interfaces/login_interface.dart';
-import 'package:hungry/models/core/recipe.dart';
-import 'package:hungry/models/helper/recipe_helper.dart';
 import 'package:hungry/views/screens/detallProductoPage.dart';
 import 'package:hungry/views/widgets/appBar.dart';
 import 'package:hungry/views/widgets/drawer_page.dart';
@@ -18,21 +16,64 @@ class ListaInventariosPage extends StatefulWidget {
 
 class _ListaInventariosPageState extends State<ListaInventariosPage> {
   TextEditingController searchInputController = TextEditingController();
-  final List<Recipe> searchResult = RecipeHelper.sarchResultRecipe;
-  Future<List<dynamic>> listaInventarios;
-  final services = ILogin();
-  var informacion;
+  List<dynamic> informacion = [];
+  List<dynamic> filteredList = [];
   var title;
+  Map<String, dynamic> selectedInventario;
+  bool loadingList = true;
 
   @override
   void initState() {
     super.initState();
     if (widget.argumento == 'bodega') {
       title = 'Inventarios BODEGA';
-      listaInventarios = services.obtenerInventariosBodega();
+      ILogin().obtenerInventariosBodega().then((data) {
+        setState(() {
+          informacion = data;
+          filteredList = informacion;
+        });
+      });
     } else if (widget.argumento == 'sistema') {
       title = 'Inventarios SISTEMA';
-      listaInventarios = services.obtenerInventarios();
+      ILogin().obtenerInventarios().then((data) {
+        setState(() {
+          informacion = data;
+          filteredList = informacion;
+        });
+      });
+    }
+
+    searchInputController.addListener(() {
+      filterResults(searchInputController.text);
+    });
+  }
+
+  @override
+  void dispose() {
+    searchInputController.dispose();
+    super.dispose();
+  }
+
+  Future filterResults(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        filteredList = List.from(informacion);
+      });
+    } else {
+      final List results = [];
+
+      informacion.forEach((inventario) {
+        final String name = '${inventario['nombre']}';
+        final String category = '${inventario['categoria']}';
+        if (name.toLowerCase().contains(query.toLowerCase()) ||
+            category.toLowerCase().contains(query.toLowerCase())) {
+          results.add(inventario);
+        }
+      });
+
+      setState(() {
+        filteredList = results;
+      });
     }
   }
 
@@ -42,41 +83,75 @@ class _ListaInventariosPageState extends State<ListaInventariosPage> {
       backgroundColor: Colors.white,
       appBar: AppBarWidget().appBar(title),
       drawer: MyDrawerWidget(),
-      body: FutureBuilder(
-        future: listaInventarios,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: Loading().loadingIndicator());
-          } else if (snapshot.hasError) {
-            return Center(
-              child: Text('${snapshot.error}'),
-            );
-          } else if (snapshot.hasData && snapshot.data != null) {
-            final inventarios = snapshot.data;
-            return Container(
-              padding: EdgeInsets.all(20.0),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.lightBlue[200],
-                    Colors.lightGreen[200],
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(20.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey[300],
-                    blurRadius: 10.0,
-                    offset: Offset(0, 2),
+      body: selectedInventario != null
+          ? ListView.builder(
+              itemCount: selectedInventario['arrayDetalle'].length,
+              itemBuilder: (context, index) {
+                final detail = selectedInventario['arrayDetalle'][index];
+                return GestureDetector(
+                  onTap: () {},
+                  child: Container(
+                    padding: EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.grey,
+                        width: 1.0,
+                      ),
+                      borderRadius: BorderRadius.circular(10.0),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Descripcion: ${detail['descripcion'] ?? ''}',
+                                style: TextStyle(
+                                  fontSize: 16.0,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 10.0),
+                              Text(
+                                'Codigo Ecostone: ${detail['codigo'] ?? ''}',
+                                style: TextStyle(
+                                  fontSize: 20.0,
+                                ),
+                              ),
+                              SizedBox(height: 10.0),
+                              Text(
+                                'Codigo FSL: ${detail['codigoFsl'] ?? ''}',
+                                style: TextStyle(fontSize: 16.0),
+                              ),
+                              SizedBox(height: 10.0),
+                              Text(
+                                'Categoria: ${detail['categoria'] ?? ''}',
+                                style: TextStyle(fontSize: 16.0),
+                              ),
+                              SizedBox(height: 10.0),
+                              Text(
+                                'Stock: ${detail['stock'] ?? ''}',
+                                style: TextStyle(fontSize: 16.0),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          color: Colors.grey,
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                );
+              },
+            )
+          : Padding(
+              padding: const EdgeInsets.all(10.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(height: 20),
                   Text(
                     title.toUpperCase(),
                     style: TextStyle(
@@ -88,6 +163,7 @@ class _ListaInventariosPageState extends State<ListaInventariosPage> {
                   ),
                   SizedBox(height: 20),
                   TextField(
+                    controller: searchInputController,
                     decoration: InputDecoration(
                       hintText: 'Buscar inventario',
                       fillColor: Colors.white,
@@ -102,67 +178,94 @@ class _ListaInventariosPageState extends State<ListaInventariosPage> {
                   SizedBox(height: 20),
                   Expanded(
                     child: ListView.builder(
-                      itemCount: inventarios.length,
+                      itemCount: filteredList.length,
                       itemBuilder: (context, index) {
-                        final inventario = inventarios[index];
+                        final inventario = filteredList[index];
                         final String fechaString = inventario['fecha'];
                         final DateTime fecha =
                             DateFormat('yyyy-MM-dd').parse(fechaString);
-                        return Container(
-                          margin: EdgeInsets.symmetric(vertical: 8.0),
-                          child: Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      SizedBox(
-                                        width:
-                                            MediaQuery.of(context).size.width *
-                                                0.6,
-                                        child: Text(
-                                          '${inventario['nombre'] != null ? inventario['nombre'] : ''}',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 18.0,
+
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              selectedInventario = inventario;
+                            });
+                          },
+                          child: Column(
+                            children: [
+                              Container(
+                                margin: EdgeInsets.symmetric(vertical: 8.0),
+                                padding: EdgeInsets.all(16.0),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20.0),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey[300],
+                                      blurRadius: 10.0,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Flexible(
+                                      flex: 3,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Nombre ', // added default name value
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 18.0,
+                                              color: Colors.black,
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                      PopupMenuButton(
-                                        itemBuilder: (context) => [
-                                          PopupMenuItem(
-                                            child: Text('Eliminar'),
-                                            value: 'eliminar',
-                                          ),
-                                          PopupMenuItem(
-                                            child: Text('Editar'),
-                                            value: 'editar',
-                                          ),
-                                          PopupMenuItem(
-                                            child: Text('Detalles'),
-                                            value: 'detalles',
+                                          SizedBox(height: 4.0),
+                                          Text(
+                                            '${inventario['nombre'] ?? 'Nombre no especificado'}', // added date text
+                                            style: TextStyle(
+                                              fontSize: 14.0,
+                                              color: Colors.black,
+                                            ),
                                           ),
                                         ],
-                                        onSelected: (value) {
-                                          if (value == 'eliminar')
-                                            handleDelete(inventario);
-                                          else if (value == 'editar')
-                                            handleEdit(inventario);
-                                          else if (value == 'detalles')
-                                            handleDetails(context, inventario);
-                                        },
                                       ),
-                                    ],
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text('$fecha'),
-                                ],
+                                    ),
+                                    Flexible(
+                                      flex: 2,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Fecha ',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 18.0,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4.0),
+                                          Text(
+                                            '${DateFormat('dd/MM/yyyy').format(fecha)}', // added time text
+                                            style: TextStyle(
+                                              fontSize: 14.0,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                              Divider(thickness: 1.0),
+                            ],
                           ),
                         );
                       },
@@ -176,21 +279,8 @@ class _ListaInventariosPageState extends State<ListaInventariosPage> {
                   ),
                 ],
               ),
-            );
-          } else {
-            return Container();
-          }
-        },
-      ),
+            ),
     );
-  }
-
-  void handleDelete(dynamic inventario) {
-    // TODO: implementar la logica de eliminar inventario
-  }
-
-  void handleEdit(dynamic inventario) {
-    // TODO: implementar la logica de editar inventario
   }
 
   void handleDetails(BuildContext context, dynamic inventario) {
